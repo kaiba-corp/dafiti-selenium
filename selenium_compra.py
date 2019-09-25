@@ -1,6 +1,7 @@
-import time, smtplib
+import time, smtplib, os, pyscreenshot, openpyxl
 from datetime import datetime
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait	
 from selenium.webdriver.chrome.options import Options
@@ -9,11 +10,13 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-#servicedesk_email = "dft11.servicedesk@gmail.com"
+
+servicedesk_email = "dft11.servicedesk@gmail.com"
+servicedesk_password = "?"
+
+#servicedesk_email = "darkneroh@gmail.com"
 #servicedesk_password = "?"
 
-servicedesk_email = "darkneroh@gmail.com"
-servicedesk_password = "?"
 
 def comprar(url, site):
 
@@ -26,20 +29,25 @@ def comprar(url, site):
 	browser.find_element_by_xpath("""//*[@id="LoginForm_email"]""").send_keys(servicedesk_email)
 	time.sleep(0.5)
 	browser.find_element_by_xpath("""//*[@id="LoginForm_password"]""").send_keys(servicedesk_password)
-	time.sleep(1)
+	time.sleep(0.5)
 	browser.find_element_by_xpath("""//*[@id="customer-account-login"]""").click()
 	time.sleep(4)
 
 	#abre um item
 	browser.get(url)
-	time.sleep(4)
+	time.sleep(8)
 
-	#clicar em comprar
-	WebDriverWait(browser,10).until(EC.visibility_of_element_located((By.XPATH,"""//*[@id="add-to-cart"]/button"""))).click()
-	time.sleep(4)
+	#se botão existe, clica comprar, senão retorna 
+	try:
+		browser.find_element_by_xpath("""//*[@id="add-to-cart"]/button[@type="submit"]""").click()
+		time.sleep(4)
+
+	except NoSuchElementException:
+		return
 
 	#ir para o carrinho
 	browser.get("https://secure.{}.com.br/cart/".format(site))
+	time.sleep(8)
 
 	#clicar em finalizar compra
 	browser.find_element_by_xpath("""//*[@id="button-finalize-order-1"]""").click()
@@ -51,6 +59,37 @@ def comprar(url, site):
 
 	#clicar em finalizar compra
 	browser.find_element_by_xpath("""//*[@id="btn_finalize_order"]""").click()
+
+	#espera o numero do pedido
+	numero_pedido = WebDriverWait(browser, 30).until(EC.visibility_of_element_located((By.XPATH,"""//span[@class="sel-order-nr"]"""))).text
+
+	#pega o horário
+	hora = datetime.now().time()
+
+	#tupla
+	pedidos.append((numero_pedido, hora))
+	print(numero_pedido, hora)
+
+def planilha():
+
+	wb = openpyxl.Workbook() 
+	sheet = wb.active 
+
+	i = 0
+
+	for numero_pedido, hora in pedidos:
+		
+		i += 1
+
+		sheet['A'+str(i)].value = numero_pedido
+		sheet['B'+str(i)].value = hora
+
+	wb.save("items_comprados.xlsx")
+	time.sleep(3)
+	os.startfile("items_comprados.xlsx")
+	time.sleep(8)
+	im = pyscreenshot.grab()
+	im.save('print.png')
 
 
 def enviar_email(erro, site):
@@ -90,26 +129,34 @@ if __name__ == "__main__":
 	#"deviceName": "Galaxy S5" 
 	}
 
+	#inicia maximizado
+	chrome_options.add_argument("--start-maximized")
 	chrome_options.add_experimental_option("prefs", prefs)
+
 	browser = webdriver.Chrome(options=chrome_options)
+	#tempo máximo esperando a pagina carregar 
 	browser.set_page_load_timeout(60)
-	browser.maximize_window()
 
 	#lista de skus para buscar
 	skus = []
 
-	url = [
-	'https://www.tricae.com.br/Kit-3pcs-Pimpolho-Menina-Lisa-Branco-4758323.html', 
+	urls = [
+	'https://www.dafiti.com.br/Meia-Zero-Skull-Line-Patt-Preto-3015915.html?hash_configuration=0c513651-0f44-45e2-a13c-d5ebeba55f6c',
 	'https://www.kanui.com.br/Meia-Zero-Full-Zero-Amarelo-3124630.html', 
-	'https://www.dafiti.com.br/Meia-Zero-Skull-Line-Patt-Preto-3015915.html?hash_configuration=0c513651-0f44-45e2-a13c-d5ebeba55f6c'
+	'https://www.tricae.com.br/Kit-3pcs-Pimpolho-Menina-Lisa-Branco-4758323.html'
 	]
 
-	sites = ['tricae', 'kanui', 'dafit']
+	sites = ['dafiti',' kanui', 'tricae']
+
+	pedidos = []
 
 	# tente
 	try:
-		for url,site in zip(url,sites):
+		
+		for url,site in zip(urls,sites):
 			comprar(url, site)
+		
+		planilha()
 
 	# exceto erro
 	except Exception as erro:
